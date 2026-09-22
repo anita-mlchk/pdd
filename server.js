@@ -1,8 +1,5 @@
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Подключаем модель Ticket из Sequelize
 const { Ticket } = require('./models');
 
 app.use(express.json());
@@ -22,13 +19,10 @@ app.get('/tickets', async (req, res) => {
 // 2. GET /tickets/:id — поиск билета по ID в БД
 app.get('/tickets/:id', async (req, res) => {
   try {
-    const ticketId = parseInt(req.params.id, 10);
-    const ticket = await Ticket.findByPk(ticketId);
-
+    const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) {
-      return res.status(404).json({ error: `Билет с ID ${ticketId} не найден` });
+      return res.status(404).json({ error: `Билет с ID ${req.params.id} не найден` });
     }
-
     res.status(200).json(ticket);
   } catch (error) {
     res.status(500).json({ error: 'Ошибка на стороне сервера' });
@@ -38,7 +32,7 @@ app.get('/tickets/:id', async (req, res) => {
 // 3. POST /tickets — создание билета в БД
 app.post('/tickets', async (req, res) => {
   try {
-    const { title, category, questionsCount, timeLimitMinutes, description } = req.body;
+    const { title, category, questionsCount, timeLimitMinutes } = req.body;
 
     if (!title || !category) {
       return res.status(400).json({ error: 'Поля "title" и "category" обязательны' });
@@ -48,8 +42,7 @@ app.post('/tickets', async (req, res) => {
       title,
       category,
       questionsCount: questionsCount || 10,
-      timeLimitMinutes: timeLimitMinutes || 15,
-      description: description || ''
+      timeLimitMinutes: timeLimitMinutes || 15
     });
 
     res.status(201).json(newTicket);
@@ -61,25 +54,23 @@ app.post('/tickets', async (req, res) => {
 // 4. PUT /tickets/:id — обновление билета в БД
 app.put('/tickets/:id', async (req, res) => {
   try {
-    const ticketId = parseInt(req.params.id, 10);
-    const ticket = await Ticket.findByPk(ticketId);
-
-    if (!ticket) {
-      return res.status(404).json({ error: `Билет с ID ${ticketId} не найден` });
-    }
-
-    const { title, category, questionsCount, timeLimitMinutes, description } = req.body;
+    const { title, category, questionsCount, timeLimitMinutes } = req.body;
 
     if (!title || !category) {
-      return res.status(400).json({ error: 'Поля "title" и "category" обязательны при PUT' });
+      return res.status(400).json({ error: 'Поля "title" и "category" обязательны' });
+    }
+
+    const ticket = await Ticket.findByPk(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({ error: `Билет с ID ${req.params.id} не найден` });
     }
 
     await ticket.update({
       title,
       category,
       questionsCount: questionsCount || 10,
-      timeLimitMinutes: timeLimitMinutes || 15,
-      description: description || ''
+      timeLimitMinutes: timeLimitMinutes || 15
     });
 
     res.status(200).json(ticket);
@@ -91,25 +82,25 @@ app.put('/tickets/:id', async (req, res) => {
 // 5. DELETE /tickets/:id — удаление билета из БД
 app.delete('/tickets/:id', async (req, res) => {
   try {
-    const ticketId = parseInt(req.params.id, 10);
-    const ticket = await Ticket.findByPk(ticketId);
+    const ticket = await Ticket.findByPk(req.params.id);
 
     if (!ticket) {
-      return res.status(404).json({ error: `Билет с ID ${ticketId} не найден` });
+      return res.status(404).json({ error: `Билет с ID ${req.params.id} не найден` });
     }
 
     await ticket.destroy();
-    res.status(200).json({ message: `Билет с ID ${ticketId} успешно удален` });
+    res.status(204).send(); // 204 No Content — стандартный код для успешного удаления без тела ответа
   } catch (error) {
     res.status(500).json({ error: 'Ошибка при удалении билета' });
   }
 });
 
+// Глобальный обработчик ошибок
 app.use((err, req, res, next) => {
-  console.error(err.stack);
   res.status(500).json({ error: 'Ошибка на стороне сервера' });
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Сервер запущен на http://localhost:${PORT}`);
+  console.log(`Сервер запущен на порту ${PORT}`);
 });
