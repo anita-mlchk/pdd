@@ -311,7 +311,7 @@ export default function TicketList() {
 
         {/* Поиск на сервере */}
         <input
-          placeholder='Поиск по названию'
+          placeholder='Поиск по названию '
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ ...fieldStyle, marginBottom: 14 }}
