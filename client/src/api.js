@@ -17,7 +17,8 @@ export const login = (email, password) => api.post('/auth/login', { email, passw
 export const register = (email, password) => api.post('/auth/register', { email, password });
 
 // search: строка поиска, signal: сигнал отмены запроса (AbortController)
-export const fetchTickets = (search, signal) =>
+export const fetchTickets = async (search, signal) =>
+  await new Promise(resolve => setTimeout(resolve, 8000)); // задержка 8 секунд
   api.get('/tickets', { params: search ? { search } : {}, signal });
 
 export const addTicket = (ticket) => api.post('/tickets', ticket);
