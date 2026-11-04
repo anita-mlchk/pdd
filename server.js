@@ -37,7 +37,7 @@ app.get('/tickets', async (req, res) => {
   }
 });
 
-app.get('/tickets/:id', async (req, res) => {
+app.get('/tickets', authenticateToken, async (req, res) => {
   try {
     const ticket = await Ticket.findByPk(req.params.id);
     if (!ticket) {
