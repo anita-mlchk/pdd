@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
+const { Op } = require('sequelize');
 
 if (!process.env.JWT_SECRET) {
   console.error('Ошибка: не задан JWT_SECRET. Проверьте файл .env в корне проекта.');
@@ -10,17 +12,24 @@ const app = express();
 const { Ticket } = require('./models');
 const { authenticateToken, isAdmin } = require('./middleware/auth');
 
+app.use(cors());          // разрешаем запросы с React-приложения (другой порт)
 app.use(express.json());
 
 app.use('/auth', require('./routes/auth'));   // /auth/register, /auth/login
 app.use('/', require('./routes/users'));      // /profile, /admin/users
 
+// Список билетов: фильтр по категории и поиск по названию
 app.get('/tickets', async (req, res) => {
   try {
-    const { category } = req.query;
-    const whereClause = category ? { category } : {};
+    const { category, search } = req.query;
+    const whereClause = {};
+    if (category) whereClause.category = category;
+    if (search) whereClause.title = { [Op.iLike]: `%${search}%` };
 
-    const tickets = await Ticket.findAll({ where: whereClause });
+    const tickets = await Ticket.findAll({
+      where: whereClause,
+      order: [['id', 'ASC']],
+    });
     res.json(tickets);
   } catch (error) {
     console.error(error);
