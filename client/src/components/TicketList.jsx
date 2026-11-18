@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDebounce } from '../hooks/useDebounce';
 import { useAuth } from '../context/AuthContext';
 import { fetchTickets, addTicket, updateTicket, deleteTicket, getErrorMessage } from '../api';
@@ -7,7 +8,6 @@ import UserBar from './UserBar';
 const CATEGORIES = ['A', 'B', 'C', 'D'];
 const EMPTY_FORM = { title: '', category: 'B', questionsCount: 20, timeLimitMinutes: 20 };
 
-// Общие стили, чтобы не повторять их в разметке
 const cardStyle = { background: '#ffffff', borderRadius: 16, padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' };
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 };
 const fieldStyle = { width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #cbd5e1', outline: 'none', fontSize: 14, boxSizing: 'border-box' };
@@ -16,29 +16,24 @@ const statLabel = { color: '#64748b', fontSize: 13, fontWeight: 500, marginBotto
 const statValue = { fontSize: 26, fontWeight: 700, color: '#0f172a' };
 
 export default function TicketList() {
-  // ---- кто вошел (из контекста) ----
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
 
-  // ---- данные с сервера и состояния запроса ----
-  const [tickets, setTickets] = useState([]);       // начинаем с пустого массива
-  const [loading, setLoading] = useState(true);     // идет ли загрузка списка
-  const [loadError, setLoadError] = useState('');   // ошибка загрузки списка
-  const [reloadKey, setReloadKey] = useState(0);    // счетчик для кнопки «Повторить»
-  const [notice, setNotice] = useState('');         // уведомление об ошибке операции
-
-  // ---- поиск на сервере ----
+  const [tickets, setTickets] = useState([]);       
+  const [loading, setLoading] = useState(true);    
+  const [loadError, setLoadError] = useState('');   
+  const [reloadKey, setReloadKey] = useState(0);    
+  const [notice, setNotice] = useState('');         
+  
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search.trim(), 500);
 
-  // ---- форма, фильтр, сортировка ----
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [filter, setFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('id');
-  const [error, setError] = useState('');           // ошибка валидации формы
+  const [sortBy, setSortBy] = useState('id'); // исправлено с id на id
+  const [error, setError] = useState('');          
 
-  // Эффект 1: загрузка списка с сервера.
-  // Срабатывает при старте, при изменении поиска и по кнопке «Повторить»
   useEffect(() => {
     const controller = new AbortController();
 
@@ -49,7 +44,7 @@ export default function TicketList() {
         const res = await fetchTickets(debouncedSearch, controller.signal);
         setTickets(res.data);
       } catch (err) {
-        if (controller.signal.aborted) return; // мы сами отменили запрос, это не ошибка
+        if (controller.signal.aborted) return;
         setLoadError(getErrorMessage(err));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -57,15 +52,13 @@ export default function TicketList() {
     }
 
     load();
-    return () => controller.abort(); // cleanup: отменяем устаревший запрос
+    return () => controller.abort(); 
   }, [debouncedSearch, reloadKey]);
 
-  // Эффект 2: заголовок вкладки
   useEffect(() => {
     document.title = `Билеты ПДД (${tickets.length})`;
   }, [tickets.length]);
 
-  // Эффект 3: уведомление исчезает само через 4 секунды
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 4000);
@@ -75,35 +68,30 @@ export default function TicketList() {
   const visibleTickets = useMemo(() => {
     const filtered = filter === 'all' ? tickets : tickets.filter(t => t.category === filter);
     return [...filtered].sort((a, b) =>
-      sortBy === 'title' ? a.title.localeCompare(b.title) : a[sortBy] - b[sortBy]
+      sortBy === 'title' ? a.title.localeCompare(b.title) : String(a[sortBy] || '').localeCompare(String(b[sortBy] || ''))
     );
   }, [tickets, filter, sortBy]);
 
   const stats = useMemo(() => ({
     total: tickets.length,
-    questions: tickets.reduce((sum, t) => sum + t.questionsCount, 0),
-    minutes: tickets.reduce((sum, t) => sum + t.timeLimitMinutes, 0),
+    questions: tickets.reduce((sum, t) => sum + (t.questionsCount || 0), 0),
+    minutes: tickets.reduce((sum, t) => sum + (t.timeLimitMinutes || 0), 0),
   }), [tickets]);
 
-  // ---- CRUD с оптимистичным обновлением ----
   const handleAdd = async (data) => {
     const tempId = Date.now();
-    // 1. сразу показываем билет (pending = ждет ответа сервера)
     setTickets(prev => [...prev, { ...data, id: tempId, pending: true }]);
     try {
-      // 2. отправляем на сервер
       const res = await addTicket(data);
-      // 3. успех: заменяем временный билет настоящим (с реальным id из БД)
       setTickets(prev => prev.map(t => (t.id === tempId ? res.data : t)));
     } catch (err) {
-      // 4. ошибка: откат и уведомление
       setTickets(prev => prev.filter(t => t.id !== tempId));
       setNotice(`Не удалось добавить билет: ${getErrorMessage(err)}`);
     }
   };
 
   const handleUpdate = async (id, data) => {
-    const previous = tickets.find(t => t.id === id); // старая версия для отката
+    const previous = tickets.find(t => t.id === id);
     setTickets(prev => prev.map(t => (t.id === id ? { ...t, ...data } : t)));
     try {
       const res = await updateTicket(id, data);
@@ -116,7 +104,7 @@ export default function TicketList() {
 
   const handleDelete = async (id) => {
     const index = tickets.findIndex(t => t.id === id);
-    const removed = tickets[index];              // запоминаем билет и его место
+    const removed = tickets[index];            
     setTickets(prev => prev.filter(t => t.id !== id));
     if (editingId === id) {
       setEditingId(null);
@@ -125,7 +113,6 @@ export default function TicketList() {
     try {
       await deleteTicket(id);
     } catch (err) {
-      // откат: возвращаем билет на прежнее место
       setTickets(prev => {
         const copy = [...prev];
         copy.splice(Math.min(index, copy.length), 0, removed);
@@ -135,7 +122,6 @@ export default function TicketList() {
     }
   };
 
-  // ---- форма ----
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
@@ -167,7 +153,8 @@ export default function TicketList() {
     setForm(EMPTY_FORM);
   };
 
-  const handleEdit = (ticket) => {
+  const handleEdit = (ticket, e) => {
+    e.stopPropagation(); // чтобы клик не открывал саму страницу билета при нажатии на «Изменить»
     setEditingId(ticket.id);
     setError('');
     setForm({
@@ -176,6 +163,11 @@ export default function TicketList() {
       questionsCount: ticket.questionsCount,
       timeLimitMinutes: ticket.timeLimitMinutes,
     });
+  };
+
+  const handleDeleteClick = (ticketId, e) => {
+    e.stopPropagation(); // чтобы клик не открывал страницу билета при нажатии на «Удалить»
+    handleDelete(ticketId);
   };
 
   const handleCancel = () => {
@@ -202,17 +194,17 @@ export default function TicketList() {
           </p>
         </header>
 
-        {/* Кто вошел и кнопка «Выйти» */}
+        {/* Пользователь и выход */}
         <UserBar />
 
-        {/* Уведомление об ошибке операции */}
+        {/* Уведомление */}
         {notice && (
           <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 12, padding: '12px 16px', marginBottom: 16, fontSize: 14 }}>
             {notice}
           </div>
         )}
 
-        {/* Карточки статистики */}
+        {/* Статистика */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
           <div style={cardStyle}>
             <div style={statLabel}>Всего билетов</div>
@@ -228,7 +220,7 @@ export default function TicketList() {
           </div>
         </div>
 
-        {/* Форма добавления / редактирования: только для администратора */}
+        {/* Форма добавления / редактирования (только для admin) */}
         {isAdmin ? (
           <div style={{ background: '#ffffff', borderRadius: 20, padding: 24, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', marginBottom: 28 }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 18, color: '#0f172a' }}>
@@ -305,13 +297,13 @@ export default function TicketList() {
           </div>
         ) : (
           <div style={{ ...cardStyle, marginBottom: 28, color: '#475569', fontSize: 14 }}>
-            Вы вошли как обычный пользователь: билеты доступны для просмотра. Для добавления, изменения и удаления нужна роль администратора.
+            Вы вошли как пользователь: билеты доступны для просмотра и прохождения. Для управления нужна роль администратора.
           </div>
         )}
 
-        {/* Поиск на сервере */}
+        {/* Поиск */}
         <input
-          placeholder='Поиск по названию '
+          placeholder='Поиск по названию...'
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ ...fieldStyle, marginBottom: 14 }}
@@ -337,10 +329,9 @@ export default function TicketList() {
           </div>
         </div>
 
-        {/* Список: загрузка, ошибка, пусто или карточки */}
+        {/* Список */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
-            <div className='spinner' />
             Загрузка билетов с сервера...
           </div>
         ) : loadError ? (
@@ -362,6 +353,7 @@ export default function TicketList() {
             {visibleTickets.map(t => (
               <div
                 key={t.id}
+                onClick={() => navigate(`/tickets/${t.id}`)}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -372,6 +364,8 @@ export default function TicketList() {
                   border: '1px solid #e2e8f0',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                   opacity: t.pending ? 0.6 : 1,
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s',
                 }}
               >
                 <div>
@@ -389,18 +383,18 @@ export default function TicketList() {
                   </div>
                 </div>
 
-                {/* Кнопки управления: только администратору */}
+                {/* Кнопки управления (только для админа) */}
                 {isAdmin && (
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}>
                     <button
-                      onClick={() => handleEdit(t)}
+                      onClick={(e) => handleEdit(t, e)}
                       disabled={t.pending}
                       style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', cursor: 'pointer', fontWeight: 500, fontSize: 13 }}
                     >
                       Изменить
                     </button>
                     <button
-                      onClick={() => handleDelete(t.id)}
+                      onClick={(e) => handleDeleteClick(t.id, e)}
                       disabled={t.pending}
                       style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontWeight: 500, fontSize: 13 }}
                     >

@@ -10,7 +10,7 @@ export default function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState('login'); // 'login' или 'register'
+  const [mode, setMode] = useState('login'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,7 +20,7 @@ export default function LoginPage() {
     document.title = 'Вход — Билеты ПДД';
   }, []);
 
-  // Уже вошли: на странице входа делать нечего, отправляем на сайт
+
   if (user) return <Navigate to='/' replace />;
 
   const handleSubmit = async () => {
@@ -31,11 +31,11 @@ export default function LoginPage() {
     setBusy(true);
     setError('');
     try {
-      // при регистрации сначала создаем пользователя, затем сразу входим
+
       if (mode === 'register') await registerRequest(email.trim(), password);
       const res = await loginRequest(email.trim(), password);
-      login(res.data);   // сохраняем токен и пользователя
-      navigate('/');     // переходим на сайт со списком билетов
+      login(res.data);   
+      navigate('/');     
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

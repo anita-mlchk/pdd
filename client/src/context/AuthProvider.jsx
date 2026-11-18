@@ -2,12 +2,12 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { AuthContext } from './AuthContext';
 
 export default function AuthProvider({ children }) {
-  // данные пользователя сохраняются в localStorage, чтобы вход пережил перезагрузку
+
   const [user, setUser] = useLocalStorage('user', null);
 
-  // data = { token, user } из ответа сервера
+
   const login = (data) => {
-    localStorage.setItem('token', data.token); // токен читает api.js
+    localStorage.setItem('token', data.token); 
     setUser(data.user);
   };
 

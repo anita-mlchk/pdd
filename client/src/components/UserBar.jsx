@@ -1,6 +1,5 @@
 import { useAuth } from '../context/AuthContext';
 
-// Показывается только внутри сайта, то есть пользователь уже вошел
 export default function UserBar() {
   const { user, logout } = useAuth();
 

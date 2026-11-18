@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { Op } = require('sequelize');
+const connectDB = require('./db');
 
 if (!process.env.JWT_SECRET) {
   console.error('Ошибка: не задан JWT_SECRET. Проверьте файл .env в корне проекта.');
@@ -9,119 +9,25 @@ if (!process.env.JWT_SECRET) {
 }
 
 const app = express();
-const { Ticket } = require('./models');
-const { authenticateToken, isAdmin } = require('./middleware/auth');
 
 app.use(cors());          // разрешаем запросы с React-приложения (другой порт)
 app.use(express.json());
 
-app.use('/auth', require('./routes/auth'));   // /auth/register, /auth/login
-app.use('/', require('./routes/users'));      // /profile, /admin/users
+app.use('/auth', require('./routes/auth'));      // /auth/register, /auth/login
+app.use('/', require('./routes/users'));         // /profile, /admin/users
+app.use('/tickets', require('./routes/tickets')); // CRUD билетов и вложенные вопросы
 
-// Список билетов: фильтр по категории и поиск по названию
-app.get('/tickets', async (req, res) => {
-  try {
-    const { category, search } = req.query;
-    const whereClause = {};
-    if (category) whereClause.category = category;
-    if (search) whereClause.title = { [Op.iLike]: `%${search}%` };
-
-    const tickets = await Ticket.findAll({
-      where: whereClause,
-      order: [['id', 'ASC']],
-    });
-    res.json(tickets);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Ошибка при получении билетов' });
-  }
-});
-
-app.get('/tickets', authenticateToken, async (req, res) => {
-  try {
-    const ticket = await Ticket.findByPk(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ error: 'Билет не найден' });
-    }
-    res.json(ticket);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Ошибка сервера' });
-  }
-});
-
-app.post('/tickets', authenticateToken, isAdmin, async (req, res) => {
-  try {
-    const { title, category, questionsCount, timeLimitMinutes, description } = req.body;
-
-    if (!title || !category) {
-      return res.status(400).json({ error: 'Поля "title" и "category" обязательны' });
-    }
-
-    const newTicket = await Ticket.create({
-      title,
-      category,
-      questionsCount: questionsCount || 20,
-      timeLimitMinutes: timeLimitMinutes || 20,
-      description: description || ''
-    });
-
-    res.status(201).json(newTicket);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Ошибка при создании билета' });
-  }
-});
-
-app.put('/tickets/:id', authenticateToken, isAdmin, async (req, res) => {
-  try {
-    const { title, category, questionsCount, timeLimitMinutes, description } = req.body;
-
-    if (!title || !category) {
-      return res.status(400).json({ error: 'Поля "title" и "category" обязательны' });
-    }
-
-    const ticket = await Ticket.findByPk(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ error: 'Билет не найден' });
-    }
-
-    await ticket.update({
-      title,
-      category,
-      questionsCount: questionsCount || 20,
-      timeLimitMinutes: timeLimitMinutes || 20,
-      description: description || ''
-    });
-
-    res.json(ticket);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Ошибка при обновлении билета' });
-  }
-});
-
-app.delete('/tickets/:id', authenticateToken, isAdmin, async (req, res) => {
-  try {
-    const ticket = await Ticket.findByPk(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ error: 'Билет не найден' });
-    }
-
-    await ticket.destroy();
-    res.status(204).send();
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Ошибка при удалении билета' });
-  }
-});
-
+// Общий обработчик непредвиденных ошибок
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
+
+// Сначала подключаемся к MongoDB, потом запускаем сервер
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
+  });
 });
